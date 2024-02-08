@@ -1,0 +1,231 @@
+// server.js
+
+const express = require('express');
+const mongoose = require('mongoose');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const authRoutes = require('./routes/authRoutes');
+const urlRoutes = require('./routes/urlRoutes');
+const requireAuth = require('./middleware/requireAuth');
+
+const app = express();
+
+// Middleware
+app.use(bodyParser.json());
+app.use(cors());
+
+// Database connection
+mongoose.connect('mongodb://localhost:27017/url_shortener', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  useCreateIndex: true,
+});
+
+mongoose.connection.on('connected', () => {
+  console.log('Connected to MongoDB');
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('Error connecting to MongoDB:', err);
+});
+
+// Routes
+app.use(authRoutes);
+app.use(requireAuth);
+app.use(urlRoutes);
+
+// Start server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
+// routes/authRoutes.js
+
+const express = require('express');
+const router = express.Router();
+const authController = require('../controllers/authController');
+
+router.post('/signup', authController.signup);
+router.post('/login', authController.login);
+
+module.exports = router;
+
+// routes/urlRoutes.js
+
+const express = require('express');
+const router = express.Router();
+const urlController = require('../controllers/urlController');
+
+router.post('/shorten', urlController.shortenUrl);
+router.get('/:shortUrl', urlController.redirect);
+
+module.exports = router;
+
+// controllers/authController.js
+
+const User = require('../models/User');
+const jwt = require('jsonwebtoken');
+
+exports.signup = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = new User({ email, password });
+    await user.save();
+    const token = jwt.sign({ userId: user._id }, 'YOUR_SECRET_KEY');
+    res.send({ token });
+  } catch (error) {
+    res.status(422).send(error.message);
+  }
+};
+
+exports.login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).send({ error: 'User not found' });
+    }
+    await user.comparePassword(password);
+    const token = jwt.sign({ userId: user._id }, 'YOUR_SECRET_KEY');
+    res.send({ token });
+  } catch (error) {
+    res.status(422).send({ error: 'Invalid email or password' });
+  }
+};
+// controllers/urlController.js
+
+const Url = require('../models/Url');
+
+exports.shortenUrl = async (req, res) => {
+  try {
+    const { longUrl } = req.body;
+    const shortUrl = generateShortUrl();
+    const url = new Url({ longUrl, shortUrl });
+    await url.save();
+    res.send({ shortUrl });
+  } catch (error) {
+    res.status(422).send(error.message);
+  }
+};
+
+exports.redirect = async (req, res) => {
+  try {
+    const shortUrl = req.params.shortUrl;
+    const url = await Url.findOne({ shortUrl });
+    if (!url) {
+      return res.status(404).send({ error: 'URL not found' });
+    }
+    res.redirect(url.longUrl);
+  } catch (error) {
+    res.status(500).send({ error: 'Server error' });
+  }
+};
+
+function generateShortUrl() {
+  // Logic to generate short URL
+}
+// models/Url.js
+
+const mongoose = require('mongoose');
+
+const urlSchema = new mongoose.Schema({
+  longUrl: { type: String, required: true },
+  shortUrl: { type: String, required: true, unique: true },
+});
+
+module.exports = mongoose.model('Url', urlSchema);
+// models/User.js
+
+const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
+
+const userSchema = new mongoose.Schema({
+  email: { type: String, unique: true, required: true },
+  password: { type: String, required: true },
+});
+
+userSchema.pre('save', async function (next) {
+  const user = this;
+  if (!user.isModified('password')) {
+    return next();
+  }
+  const salt = await bcrypt.genSalt(10);
+  const hash = await bcrypt.hash(user.password, salt);
+  user.password = hash;
+  next();
+});
+
+userSchema.methods.comparePassword = async function (candidatePassword) {
+  const user = this;
+  const isMatch = await bcrypt.compare(candidatePassword, user.password);
+  if (!isMatch) {
+    throw new Error();
+  }
+};
+
+module.exports = mongoose.model('User', userSchema);
+// middleware/requireAuth.js
+
+const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
+const User = mongoose.model('User');
+
+module.exports = (req, res, next) => {
+  const { authorization } = req.headers;
+  if (!authorization) {
+    return res.status(401).send({ error: 'You must be logged in' });
+  }
+  const token = authorization.replace('Bearer ', '');
+  jwt.verify(token, 'YOUR_SECRET_KEY', async (err, payload) => {
+    if (err) {
+      return res.status(401).send({ error: 'You must be logged in' });
+    }
+    const { userId } = payload;
+    const user = await User.findById(userId);
+    req.user = user;
+    next();
+  });
+};
+// App.js
+
+import React from 'react';
+import { BrowserRouter as Router, Route, Switch } from 'react-router-dom';
+import Signup from './components/Signup';
+import Login from './components/Login';
+import Dashboard from './components/Dashboard';
+
+function App() {
+  return (
+    <Router>
+      <Switch>
+        <Route exact path="/signup" component={Signup} />
+        <Route exact path="/login" component={Login} />
+        <Route exact path="/dashboard" component={Dashboard} />
+      </Switch>
+    </Router>
+  );
+}
+
+export default App;
+
+// Signup.js
+
+import React, { useState } from 'react';
+import axios from 'axios';
+
+function Signup() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await axios.post('http://localhost:5000/signup', { email, password });
+      console.log(response.data);
+    } catch (error) {
+      console.error(error.response.data);
+    }
+  };
+
+  return (
