@@ -229,3 +229,80 @@ function Signup() {
   };
 
   return (
+ <div>
+      <h1>Signup</h1>
+      <form onSubmit={handleSubmit}>
+        <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <button type="submit">Signup</button>
+      </form>
+    </div>
+  );
+}
+
+export default Signup;
+// Login.js
+
+import React, { useState } from 'react';
+import axios from 'axios';
+
+function Login() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await axios.post('http://localhost:5000/login', { email, password });
+      console.log(response.data);
+    } catch (error) {
+      console.error(error.response.data);
+    }
+  };
+
+  return (
+    <div>
+      <h1>Login</h1>
+      <form onSubmit={handleSubmit}>
+        <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <button type="submit">Login</button>
+      </form>
+    </div>
+  );
+}
+
+export default Login;
+
+// Dashboard.js
+
+import React, { useState } from 'react';
+import axios from 'axios';
+
+function Dashboard() {
+  const [longUrl, setLongUrl] = useState('');
+  const [shortUrl, setShortUrl] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await axios.post('http://localhost:5000/shorten', { longUrl });
+      setShortUrl(response.data.shortUrl);
+    } catch (error) {
+      console.error(error.response.data);
+    }
+  };
+
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      <form onSubmit={handleSubmit}>
+        <input type="text" placeholder="Enter long URL" value={longUrl} onChange={(e) => setLongUrl(e.target.value)} />
+        <button type="submit">Shorten</button>
+      </form>
+      {shortUrl && <p>Shortened URL: {shortUrl}</p>}
+    </div>
+  );
+}
+
+export default Dashboard;
